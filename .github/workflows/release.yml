@@ -164,7 +164,7 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-tap
 
-      - name: Create PR
+      - name: Update formula
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
@@ -174,17 +174,33 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          BRANCH="kvmm-${VERSION}"
-          git checkout -b "${BRANCH}"
+          # Detect default branch
+          DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
 
-          cp ../kvmm.rb Formula/kvmm.rb
+          # Check if repo has any commits
+          if ! git rev-parse HEAD >/dev/null 2>&1; then
+            echo "Empty repository - pushing directly to ${DEFAULT_BRANCH}"
+            mkdir -p Formula
+            cp ../kvmm.rb Formula/kvmm.rb
+            git add Formula/kvmm.rb
+            git commit -m "kvmm ${VERSION}"
+            git branch -M "${DEFAULT_BRANCH}"
+            git push -u origin "${DEFAULT_BRANCH}"
+          else
+            # Normal flow - create branch and PR
+            BRANCH="kvmm-${VERSION}"
+            git checkout -b "${BRANCH}"
 
-          git add Formula/kvmm.rb
-          git commit -m "kvmm ${VERSION}"
-          git push origin "${BRANCH}"
+            mkdir -p Formula
+            cp ../kvmm.rb Formula/kvmm.rb
 
-          gh pr create \
-            --title "kvmm ${VERSION}" \
-            --body "Automated release of kvmm v${VERSION}" \
-            --base main \
-            --head "${BRANCH}"
+            git add Formula/kvmm.rb
+            git commit -m "kvmm ${VERSION}"
+            git push origin "${BRANCH}"
+
+            gh pr create \
+              --title "kvmm ${VERSION}" \
+              --body "Automated release of kvmm v${VERSION}" \
+              --base "${DEFAULT_BRANCH}" \
+              --head "${BRANCH}"
+          fi
