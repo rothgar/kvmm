@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kvmm
+  labels:
+    app: kvmm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kvmm
+  template:
+    metadata:
+      labels:
+        app: kvmm
+    spec:
+      containers:
+        - name: kvmm
+          image: ghcr.io/rothgar/kvmm:latest
+          args: ["server", "-config", "/data/config.toml"]
+          ports:
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - name: config
+              mountPath: /data/config.toml
+              subPath: config.toml
+            - name: data
+              mountPath: /data/thumbnails
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+      volumes:
+        - name: config
+          configMap:
+            name: kvmm-config
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kvmm
+  labels:
+    app: kvmm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8080
+      name: http
+  selector:
+    app: kvmm
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kvmm-config
+data:
+  config.toml: |
+    [server]
+    port = 8080
+
+    [[devices]]
+    host = "192.168.1.100"
+    alias = "Example KVM"

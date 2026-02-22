@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KVM Manager</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            color: #4ecca3;
+        }
+
+        .btn {
+            background: #4ecca3;
+            color: #1a1a2e;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #3db892;
+        }
+
+        .btn-secondary {
+            background: #444;
+            color: #eee;
+        }
+
+        .btn-secondary:hover {
+            background: #555;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+
+        .devices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .device-card {
+            background: #16213e;
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+        }
+
+        .device-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .device-thumbnail {
+            width: 100%;
+            height: 160px;
+            background: #0f1629;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .device-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .device-thumbnail .placeholder {
+            color: #333;
+            font-size: 3rem;
+        }
+
+        .device-info {
+            padding: 15px 20px 20px;
+            position: relative;
+        }
+
+        .device-card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+            color: #4ecca3;
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 18px;
+            right: 20px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #555;
+        }
+
+        .status-indicator.online {
+            background: #4ecca3;
+            box-shadow: 0 0 8px #4ecca3;
+        }
+
+        .status-indicator.offline {
+            background: #e74c3c;
+        }
+
+        .device-card .host {
+            color: #888;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+
+        .device-card .auth-badge {
+            display: inline-block;
+            background: #2a4a3a;
+            color: #4ecca3;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-top: 10px;
+        }
+
+        .device-card .no-auth {
+            background: #3a3a4a;
+            color: #888;
+        }
+
+        .device-actions {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 5px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .device-card:hover .device-actions {
+            opacity: 1;
+        }
+
+        .device-actions button {
+            background: rgba(0, 0, 0, 0.6);
+            border: none;
+            color: #fff;
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .device-actions button:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 30px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            margin: auto;
+        }
+
+        .modal h2 {
+            margin-bottom: 25px;
+            color: #4ecca3;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #1a1a2e;
+            color: #eee;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4ecca3;
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 5px;
+            color: #666;
+            font-size: 0.8rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 25px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state p {
+            margin-bottom: 20px;
+        }
+
+        /* Thumbnail upload styles */
+        .thumbnail-section {
+            margin-bottom: 20px;
+        }
+
+        .thumbnail-section label {
+            display: block;
+            margin-bottom: 6px;
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+
+        .thumbnail-preview {
+            width: 100%;
+            height: 120px;
+            background: #0f1629;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            overflow: hidden;
+            border: 2px dashed #333;
+        }
+
+        .thumbnail-preview img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .thumbnail-preview .placeholder-text {
+            color: #555;
+            font-size: 0.9rem;
+        }
+
+        .thumbnail-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .thumbnail-controls input[type="file"] {
+            display: none;
+        }
+
+        .thumbnail-controls .btn {
+            flex: 1;
+            min-width: 100px;
+            padding: 8px 12px;
+            font-size: 0.85rem;
+        }
+
+        .thumbnail-url-input {
+            display: none;
+            margin-top: 10px;
+        }
+
+        .thumbnail-url-input.active {
+            display: flex;
+            gap: 10px;
+        }
+
+        .thumbnail-url-input input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #1a1a2e;
+            color: #eee;
+            font-size: 0.9rem;
+        }
+
+        .thumbnail-url-input input:focus {
+            outline: none;
+            border-color: #4ecca3;
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>KVMM</h1>
+            <button class="btn" onclick="showAddModal()">+ Add Device</button>
+        </header>
+
+        <div id="devices-grid" class="devices-grid"></div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="device-modal" class="modal-overlay">
+        <div class="modal">
+            <h2 id="modal-title">Add Device</h2>
+            <form id="device-form" onsubmit="saveDevice(event)">
+                <input type="hidden" id="device-id">
+
+                <div class="form-group">
+                    <label for="host">Host *</label>
+                    <input type="text" id="host" required placeholder="192.168.1.100 or kvm.local">
+                </div>
+
+                <div class="form-group">
+                    <label for="alias">Alias</label>
+                    <input type="text" id="alias" placeholder="Server Room KVM">
+                    <small>Friendly name (optional)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" placeholder="admin">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="Leave blank to keep unchanged">
+                    <small>For auto-login via Basic Auth</small>
+                </div>
+
+                <div class="thumbnail-section" id="thumbnail-section" style="display: none;">
+                    <label>Thumbnail</label>
+                    <div class="thumbnail-preview" id="thumbnail-preview">
+                        <span class="placeholder-text">No thumbnail</span>
+                    </div>
+                    <div class="thumbnail-controls">
+                        <input type="file" id="thumbnail-file" accept="image/*" onchange="handleFileSelect(event)">
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('thumbnail-file').click()">Upload File</button>
+                        <button type="button" class="btn btn-secondary" onclick="toggleUrlInput()">From URL</button>
+                        <button type="button" class="btn btn-danger btn-small" id="remove-thumb-btn" style="display: none;" onclick="removeThumbnail()">Remove</button>
+                    </div>
+                    <div class="thumbnail-url-input" id="thumbnail-url-input">
+                        <input type="text" id="thumbnail-url" placeholder="https://example.com/image.jpg">
+                        <button type="button" class="btn" onclick="fetchThumbnailFromUrl()">Fetch</button>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>Delete Device</h2>
+            <p style="margin-bottom: 20px; color: #aaa;">Are you sure you want to delete this device?</p>
+            <input type="hidden" id="delete-device-id">
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let devices = [];
+        let deviceStatuses = {}; // { deviceId: true/false }
+        let pendingThumbnail = null; // { type: 'file' | 'url', data: File | string }
+        let statusInterval = null;
+
+        // Load devices on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDevices();
+            // Poll status every 10 seconds
+            statusInterval = setInterval(loadStatuses, 10000);
+        });
+
+        async function loadDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                devices = await response.json();
+                renderDevices();
+                loadStatuses(); // Initial status check
+            } catch (error) {
+                console.error('Failed to load devices:', error);
+            }
+        }
+
+        async function loadStatuses() {
+            try {
+                const response = await fetch('/api/status');
+                const statuses = await response.json();
+                statuses.forEach(s => {
+                    deviceStatuses[s.id] = s.reachable;
+                });
+                updateStatusIndicators();
+            } catch (error) {
+                console.error('Failed to load statuses:', error);
+            }
+        }
+
+        function updateStatusIndicators() {
+            document.querySelectorAll('.status-indicator').forEach(el => {
+                const deviceId = el.dataset.deviceId;
+                const isOnline = deviceStatuses[deviceId];
+                el.classList.remove('online', 'offline');
+                if (isOnline === true) {
+                    el.classList.add('online');
+                    el.title = 'Online';
+                } else if (isOnline === false) {
+                    el.classList.add('offline');
+                    el.title = 'Offline';
+                }
+            });
+        }
+
+        function renderDevices() {
+            const grid = document.getElementById('devices-grid');
+
+            if (!devices || devices.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <p>No KVM devices configured yet.</p>
+                        <button class="btn" onclick="showAddModal()">Add Your First Device</button>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = devices.map(device => `
+                <div class="device-card" onclick="openDevice('${device.id}')">
+                    <div class="device-actions">
+                        <button onclick="event.stopPropagation(); showEditModal('${device.id}')" title="Edit">&#9998;</button>
+                        <button onclick="event.stopPropagation(); showDeleteModal('${device.id}')" title="Delete">&#10005;</button>
+                    </div>
+                    <div class="device-thumbnail">
+                        ${device.thumbnail
+                            ? `<img src="/thumbnails/${device.id}?t=${Date.now()}" alt="Thumbnail" onerror="this.parentElement.innerHTML='<span class=\\'placeholder\\'>&#9881;</span>'">`
+                            : '<span class="placeholder">&#9881;</span>'
+                        }
+                    </div>
+                    <div class="device-info">
+                        <span class="status-indicator" data-device-id="${device.id}" title="Checking..."></span>
+                        <h3>${escapeHtml(device.alias || device.host)}</h3>
+                        ${device.alias ? `<div class="host">${escapeHtml(device.host)}</div>` : ''}
+                        <span class="auth-badge ${device.username ? '' : 'no-auth'}">
+                            ${device.username ? 'Auto-login' : 'No credentials'}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+
+            // Apply any known statuses
+            updateStatusIndicators();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function openDevice(id) {
+            window.open(`/go/${id}`, '_blank');
+        }
+
+        function showAddModal() {
+            document.getElementById('modal-title').textContent = 'Add Device';
+            document.getElementById('device-form').reset();
+            document.getElementById('device-id').value = '';
+            document.getElementById('thumbnail-section').style.display = 'none';
+            document.getElementById('device-modal').classList.add('active');
+            document.getElementById('host').focus();
+            resetThumbnailUI();
+        }
+
+        function showEditModal(id) {
+            const device = devices.find(d => d.id === id);
+            if (!device) return;
+
+            document.getElementById('modal-title').textContent = 'Edit Device';
+            document.getElementById('device-id').value = device.id;
+            document.getElementById('host').value = device.host;
+            document.getElementById('alias').value = device.alias || '';
+            document.getElementById('username').value = device.username || '';
+            document.getElementById('password').value = '';
+
+            // Show thumbnail section for editing
+            document.getElementById('thumbnail-section').style.display = 'block';
+            resetThumbnailUI();
+
+            // Show current thumbnail if exists
+            if (device.thumbnail) {
+                const preview = document.getElementById('thumbnail-preview');
+                preview.innerHTML = `<img src="/thumbnails/${device.id}?t=${Date.now()}" alt="Thumbnail">`;
+                document.getElementById('remove-thumb-btn').style.display = 'block';
+            }
+
+            document.getElementById('device-modal').classList.add('active');
+        }
+
+        function resetThumbnailUI() {
+            pendingThumbnail = null;
+            document.getElementById('thumbnail-preview').innerHTML = '<span class="placeholder-text">No thumbnail</span>';
+            document.getElementById('thumbnail-url-input').classList.remove('active');
+            document.getElementById('thumbnail-url').value = '';
+            document.getElementById('thumbnail-file').value = '';
+            document.getElementById('remove-thumb-btn').style.display = 'none';
+        }
+
+        function closeModal() {
+            document.getElementById('device-modal').classList.remove('active');
+            pendingThumbnail = null;
+        }
+
+        function showDeleteModal(id) {
+            document.getElementById('delete-device-id').value = id;
+            document.getElementById('delete-modal').classList.add('active');
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('delete-modal').classList.remove('active');
+        }
+
+        function toggleUrlInput() {
+            const urlInput = document.getElementById('thumbnail-url-input');
+            urlInput.classList.toggle('active');
+            if (urlInput.classList.contains('active')) {
+                document.getElementById('thumbnail-url').focus();
+            }
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file');
+                return;
+            }
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('thumbnail-preview').innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+                document.getElementById('remove-thumb-btn').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+
+            pendingThumbnail = { type: 'file', data: file };
+        }
+
+        async function fetchThumbnailFromUrl() {
+            const url = document.getElementById('thumbnail-url').value.trim();
+            if (!url) {
+                alert('Please enter a URL');
+                return;
+            }
+
+            const deviceId = document.getElementById('device-id').value;
+            if (!deviceId) {
+                // For new devices, just preview
+                document.getElementById('thumbnail-preview').innerHTML = `<img src="${url}" alt="Preview" onerror="alert('Failed to load image')">`;
+                document.getElementById('remove-thumb-btn').style.display = 'block';
+                pendingThumbnail = { type: 'url', data: url };
+                document.getElementById('thumbnail-url-input').classList.remove('active');
+                return;
+            }
+
+            // For existing devices, upload immediately
+            try {
+                const section = document.getElementById('thumbnail-section');
+                section.classList.add('loading');
+
+                const response = await fetch(`/api/devices/${deviceId}/thumbnail`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(error);
+                }
+
+                // Update preview
+                document.getElementById('thumbnail-preview').innerHTML = `<img src="/thumbnails/${deviceId}?t=${Date.now()}" alt="Thumbnail">`;
+                document.getElementById('remove-thumb-btn').style.display = 'block';
+                document.getElementById('thumbnail-url-input').classList.remove('active');
+                document.getElementById('thumbnail-url').value = '';
+
+                // Reload devices to update grid
+                await loadDevices();
+            } catch (error) {
+                alert(`Failed to fetch thumbnail: ${error.message}`);
+            } finally {
+                document.getElementById('thumbnail-section').classList.remove('loading');
+            }
+        }
+
+        async function uploadThumbnailFile(deviceId, file) {
+            const formData = new FormData();
+            formData.append('thumbnail', file);
+
+            const response = await fetch(`/api/devices/${deviceId}/thumbnail`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(error);
+            }
+        }
+
+        async function uploadThumbnailUrl(deviceId, url) {
+            const response = await fetch(`/api/devices/${deviceId}/thumbnail`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(error);
+            }
+        }
+
+        async function removeThumbnail() {
+            const deviceId = document.getElementById('device-id').value;
+
+            if (deviceId) {
+                try {
+                    const response = await fetch(`/api/devices/${deviceId}/thumbnail`, {
+                        method: 'DELETE'
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.text();
+                        throw new Error(error);
+                    }
+
+                    await loadDevices();
+                } catch (error) {
+                    alert(`Failed to remove thumbnail: ${error.message}`);
+                    return;
+                }
+            }
+
+            resetThumbnailUI();
+        }
+
+        async function saveDevice(event) {
+            event.preventDefault();
+
+            const id = document.getElementById('device-id').value;
+            const data = {
+                host: document.getElementById('host').value,
+                alias: document.getElementById('alias').value,
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+
+            try {
+                const url = id ? `/api/devices/${id}` : '/api/devices';
+                const method = id ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    const error = await response.text();
+                    alert(`Error: ${error}`);
+                    return;
+                }
+
+                const savedDevice = await response.json();
+
+                // Upload pending thumbnail if any
+                if (pendingThumbnail) {
+                    try {
+                        if (pendingThumbnail.type === 'file') {
+                            await uploadThumbnailFile(savedDevice.id, pendingThumbnail.data);
+                        } else if (pendingThumbnail.type === 'url') {
+                            await uploadThumbnailUrl(savedDevice.id, pendingThumbnail.data);
+                        }
+                    } catch (error) {
+                        console.error('Failed to upload thumbnail:', error);
+                        // Don't fail the whole save, just warn
+                        alert(`Device saved, but thumbnail upload failed: ${error.message}`);
+                    }
+                }
+
+                closeModal();
+                await loadDevices();
+            } catch (error) {
+                console.error('Failed to save device:', error);
+                alert('Failed to save device');
+            }
+        }
+
+        async function confirmDelete() {
+            const id = document.getElementById('delete-device-id').value;
+
+            try {
+                const response = await fetch(`/api/devices/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    const error = await response.text();
+                    alert(`Error: ${error}`);
+                    return;
+                }
+
+                closeDeleteModal();
+                await loadDevices();
+            } catch (error) {
+                console.error('Failed to delete device:', error);
+                alert('Failed to delete device');
+            }
+        }
+
+        // Close modals on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                closeDeleteModal();
+            }
+        });
+
+        // Close modals on overlay click
+        document.getElementById('device-modal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeModal();
+        });
+        document.getElementById('delete-modal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeDeleteModal();
+        });
+    </script>
+</body>
+</html>
