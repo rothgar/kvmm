@@ -169,39 +169,56 @@ func runOpen(query string) {
 
 	query = strings.ToLower(query)
 
-	var match *CLIDevice
-	// Exact match first
+	// First try exact match (case insensitive)
 	for i, d := range devices {
 		if strings.ToLower(d.Alias) == query || strings.ToLower(d.Host) == query {
-			match = &devices[i]
-			break
+			openDeviceInBrowser(server, &devices[i])
+			return
 		}
 	}
 
-	// Partial match if no exact match
-	if match == nil {
-		for i, d := range devices {
-			if strings.Contains(strings.ToLower(d.Alias), query) ||
-				strings.Contains(strings.ToLower(d.Host), query) {
-				match = &devices[i]
-				break
-			}
+	// Collect all partial matches
+	var matches []CLIDevice
+	for _, d := range devices {
+		if strings.Contains(strings.ToLower(d.Alias), query) ||
+			strings.Contains(strings.ToLower(d.Host), query) {
+			matches = append(matches, d)
 		}
 	}
 
-	if match == nil {
-		fmt.Fprintf(os.Stderr, "Device not found: %s\n", query)
+	switch len(matches) {
+	case 0:
+		fmt.Fprintf(os.Stderr, "No device found matching: %s\n", query)
 		fmt.Fprintln(os.Stderr, "Use 'kvmm list' to see available devices")
 		os.Exit(1)
+	case 1:
+		openDeviceInBrowser(server, &matches[0])
+	default:
+		fmt.Fprintf(os.Stderr, "Multiple devices match '%s':\n\n", query)
+		w := tabwriter.NewWriter(os.Stderr, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "ALIAS\tHOST")
+		fmt.Fprintln(w, "-----\t----")
+		for _, d := range matches {
+			alias := d.Alias
+			if alias == "" {
+				alias = "-"
+			}
+			fmt.Fprintf(w, "%s\t%s\n", alias, d.Host)
+		}
+		w.Flush()
+		fmt.Fprintln(os.Stderr, "\nBe more specific.")
+		os.Exit(1)
 	}
+}
 
-	url := fmt.Sprintf("%s/go/%s", server, match.ID)
-	name := match.Alias
+func openDeviceInBrowser(server string, device *CLIDevice) {
+	url := fmt.Sprintf("%s/go/%s", server, device.ID)
+	name := device.Alias
 	if name == "" {
-		name = match.Host
+		name = device.Host
 	}
 
-	fmt.Printf("Opening %s (%s)...\n", name, match.Host)
+	fmt.Printf("Opening %s (%s)...\n", name, device.Host)
 
 	if err := openBrowser(url); err != nil {
 		fmt.Printf("Open this URL in your browser: %s\n", url)
