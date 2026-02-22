@@ -20,6 +20,17 @@ docker run --rm -t \
     ghcr.io/rothgar/kvmm:latest \
       list
 ```
+Jump to a KVM by using the alias name (case insensitive and partial matching).
+
+Install locally with homebrew
+
+```
+brew install rothgar/tap/kvmm
+```
+Open a shortcut with:
+```
+kvmm spark
+```
 
 ## Usage
 
@@ -60,6 +71,7 @@ host = "192.168.1.100"
 alias = "Server Room KVM"
 username = "admin"
 password = "secret"
+thumbnail = server-room.jpg
 
 [[devices]]
 host = "kvm2.local"

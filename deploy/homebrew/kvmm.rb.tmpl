@@ -1,0 +1,49 @@
+# typed: false
+# frozen_string_literal: true
+
+class Kvmm < Formula
+  desc "KVM Manager - manage multiple HTTP KVM devices from CLI or web UI"
+  homepage "https://github.com/rothgar/kvmm"
+  version "{{VERSION}}"
+  license "MIT"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/rothgar/kvmm/releases/download/v{{VERSION}}/kvmm-darwin-arm64.tar.gz"
+      sha256 "{{SHA256_DARWIN_ARM64}}"
+    end
+    on_intel do
+      url "https://github.com/rothgar/kvmm/releases/download/v{{VERSION}}/kvmm-darwin-amd64.tar.gz"
+      sha256 "{{SHA256_DARWIN_AMD64}}"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/rothgar/kvmm/releases/download/v{{VERSION}}/kvmm-linux-arm64.tar.gz"
+      sha256 "{{SHA256_LINUX_ARM64}}"
+    end
+    on_intel do
+      url "https://github.com/rothgar/kvmm/releases/download/v{{VERSION}}/kvmm-linux-amd64.tar.gz"
+      sha256 "{{SHA256_LINUX_AMD64}}"
+    end
+  end
+
+  def install
+    bin.install "kvmm"
+  end
+
+  def caveats
+    <<~EOS
+      To configure the CLI to connect to a remote server:
+        echo "server = http://your-server:8080" > ~/.config/kvmm.conf
+
+      To start the server locally:
+        kvmm server -config /path/to/config.toml
+    EOS
+  end
+
+  test do
+    assert_match "KVMM", shell_output("#{bin}/kvmm help")
+  end
+end

@@ -10,12 +10,79 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  build-binaries:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -ldflags="-s -w" -o kvmm .
+          tar -czvf kvmm-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz kvmm
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kvmm-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: kvmm-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+
+  release:
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          mv artifacts/*/*.tar.gz release/
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*.tar.gz
+          generate_release_notes: true
+
+  build-and-push-container:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,3 +121,70 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release assets
+        run: |
+          VERSION=${{ needs.release.outputs.version }}
+          mkdir -p assets
+          cd assets
+          curl -sLO "https://github.com/rothgar/kvmm/releases/download/v${VERSION}/kvmm-darwin-arm64.tar.gz"
+          curl -sLO "https://github.com/rothgar/kvmm/releases/download/v${VERSION}/kvmm-darwin-amd64.tar.gz"
+          curl -sLO "https://github.com/rothgar/kvmm/releases/download/v${VERSION}/kvmm-linux-arm64.tar.gz"
+          curl -sLO "https://github.com/rothgar/kvmm/releases/download/v${VERSION}/kvmm-linux-amd64.tar.gz"
+
+      - name: Calculate checksums
+        id: checksums
+        run: |
+          echo "sha256_darwin_arm64=$(sha256sum assets/kvmm-darwin-arm64.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "sha256_darwin_amd64=$(sha256sum assets/kvmm-darwin-amd64.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "sha256_linux_arm64=$(sha256sum assets/kvmm-linux-arm64.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "sha256_linux_amd64=$(sha256sum assets/kvmm-linux-amd64.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Generate formula
+        run: |
+          VERSION=${{ needs.release.outputs.version }}
+          sed -e "s/{{VERSION}}/${VERSION}/g" \
+              -e "s/{{SHA256_DARWIN_ARM64}}/${{ steps.checksums.outputs.sha256_darwin_arm64 }}/g" \
+              -e "s/{{SHA256_DARWIN_AMD64}}/${{ steps.checksums.outputs.sha256_darwin_amd64 }}/g" \
+              -e "s/{{SHA256_LINUX_ARM64}}/${{ steps.checksums.outputs.sha256_linux_arm64 }}/g" \
+              -e "s/{{SHA256_LINUX_AMD64}}/${{ steps.checksums.outputs.sha256_linux_amd64 }}/g" \
+              deploy/homebrew/kvmm.rb.tmpl > kvmm.rb
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: rothgar/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION=${{ needs.release.outputs.version }}
+          cd homebrew-tap
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          BRANCH="kvmm-${VERSION}"
+          git checkout -b "${BRANCH}"
+
+          cp ../kvmm.rb Formula/kvmm.rb
+
+          git add Formula/kvmm.rb
+          git commit -m "kvmm ${VERSION}"
+          git push origin "${BRANCH}"
+
+          gh pr create \
+            --title "kvmm ${VERSION}" \
+            --body "Automated release of kvmm v${VERSION}" \
+            --base main \
+            --head "${BRANCH}"
