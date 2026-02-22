@@ -7,7 +7,18 @@
 ## Run
 
 ```bash
-docker run -d -p 8080:8080 -v ./config.toml:/data/config.toml ghcr.io/rothgar/kvmm:latest 
+docker run -d -p 8080:8080 \
+  -v ./config.toml:/config.toml \
+    ghcr.io/rothgar/kvmm:latest \
+      server -config /config.toml
+```
+Open your web browser http://localhost:8080 or use the CLI
+
+```
+docker run --rm -t \
+  -e KVMM_SERVER=http://localhost:8080 \
+    ghcr.io/rothgar/kvmm:latest \
+      list
 ```
 
 ## Usage
