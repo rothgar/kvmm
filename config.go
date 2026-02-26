@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -86,19 +87,30 @@ func LoadConfig(path string) (*Config, error) {
 // Auto-generated thumbnails are saved to disk but NOT recorded in the config file.
 // They are automatically matched to devices by ID when serving.
 func (c *Config) GenerateMissingThumbnails() {
+	log.Printf("GenerateMissingThumbnails: checking %d devices", len(c.Devices))
 	for _, device := range c.Devices {
 		if device.Thumbnail == "" {
 			// Check if auto-generated thumbnail already exists
 			autoPath := filepath.Join(c.GetThumbnailDir(), device.ID+".jpg")
 			if _, err := os.Stat(autoPath); err == nil {
+				log.Printf("GenerateMissingThumbnails: device %s (%s) already has auto-thumbnail at %s", device.ID, device.Alias, autoPath)
 				continue // Already exists
 			}
 
 			// Generate and save auto thumbnail (without updating config)
+			log.Printf("GenerateMissingThumbnails: generating thumbnail for device %s (%s)", device.ID, device.Alias)
 			seed := device.ID + device.Host + device.Alias
 			if pattern, err := GeneratePatternThumbnail(seed); err == nil {
-				c.SaveAutoThumbnail(device.ID, pattern)
+				if err := c.SaveAutoThumbnail(device.ID, pattern); err != nil {
+					log.Printf("GenerateMissingThumbnails: failed to save thumbnail for device %s: %v", device.ID, err)
+				} else {
+					log.Printf("GenerateMissingThumbnails: saved thumbnail for device %s at %s", device.ID, autoPath)
+				}
+			} else {
+				log.Printf("GenerateMissingThumbnails: failed to generate pattern for device %s: %v", device.ID, err)
 			}
+		} else {
+			log.Printf("GenerateMissingThumbnails: device %s (%s) has explicit thumbnail: %s", device.ID, device.Alias, device.Thumbnail)
 		}
 	}
 }
@@ -107,12 +119,15 @@ func (c *Config) GenerateMissingThumbnails() {
 // The thumbnail is saved with a predictable filename ({id}.jpg) so it can be matched
 // automatically when serving.
 func (c *Config) SaveAutoThumbnail(id string, data []byte) error {
+	thumbDir := c.GetThumbnailDir()
+	log.Printf("SaveAutoThumbnail: ensuring directory exists: %s", thumbDir)
 	if err := c.EnsureThumbnailDir(); err != nil {
 		return fmt.Errorf("creating thumbnail dir: %w", err)
 	}
 
 	filename := id + ".jpg"
-	thumbPath := filepath.Join(c.GetThumbnailDir(), filename)
+	thumbPath := filepath.Join(thumbDir, filename)
+	log.Printf("SaveAutoThumbnail: writing %d bytes to %s", len(data), thumbPath)
 	return os.WriteFile(thumbPath, data, 0644)
 }
 
@@ -379,15 +394,20 @@ func (c *Config) GetThumbnailPath(id string) (string, bool) {
 		if d.ID == id {
 			// First check for explicitly set thumbnail
 			if d.Thumbnail != "" {
-				return filepath.Join(c.GetThumbnailDir(), d.Thumbnail), true
+				path := filepath.Join(c.GetThumbnailDir(), d.Thumbnail)
+				log.Printf("GetThumbnailPath: device %s has explicit thumbnail: %s", id, path)
+				return path, true
 			}
 			// Fall back to auto-generated thumbnail
 			autoPath := filepath.Join(c.GetThumbnailDir(), id+".jpg")
 			if _, err := os.Stat(autoPath); err == nil {
+				log.Printf("GetThumbnailPath: device %s using auto-thumbnail: %s", id, autoPath)
 				return autoPath, true
 			}
+			log.Printf("GetThumbnailPath: device %s has no thumbnail (checked %s)", id, autoPath)
 			return "", false
 		}
 	}
+	log.Printf("GetThumbnailPath: device %s not found", id)
 	return "", false
 }

@@ -7,69 +7,58 @@
   host = "192.168.1.10"
   alias = "Server Room KVM"
   username = "admin"
-  thumbnail = "dev-001.jpg"
 
 [[devices]]
   id = "dev-002"
   host = "192.168.1.20"
   alias = "Data Center A"
   username = "root"
-  thumbnail = "dev-002.jpg"
 
 [[devices]]
   id = "dev-003"
   host = "10.0.0.50"
   alias = "Lab Server"
-  thumbnail = "dev-003.jpg"
 
 [[devices]]
   id = "dev-004"
   host = "kvm-rack1.local"
   alias = "Rack 1 Console"
   username = "admin"
-  thumbnail = "dev-004.jpg"
 
 [[devices]]
   id = "dev-005"
   host = "192.168.2.100"
   alias = "Dev Environment"
-  thumbnail = "dev-005.jpg"
 
 [[devices]]
   id = "dev-006"
   host = "10.10.10.5"
   alias = "Production DB"
   username = "dbadmin"
-  thumbnail = "dev-006.jpg"
 
 [[devices]]
   id = "dev-007"
   host = "kvm-office.local"
   alias = "Office Workstation"
-  thumbnail = "dev-007.jpg"
 
 [[devices]]
   id = "dev-008"
   host = "192.168.50.1"
   alias = "Network Switch"
   username = "admin"
-  thumbnail = "dev-008.jpg"
 
 [[devices]]
   id = "dev-009"
   host = "10.0.1.25"
   alias = "Backup Server"
-  thumbnail = "dev-009.jpg"
 
 [[devices]]
   id = "dev-010"
   host = "kvm-test.local"
   alias = "Test Bench"
   username = "tester"
-  thumbnail = "dev-010.jpg"
 
 [[devices]]
   id = "1a663881-01f3-44d9-9ac6-9e4ff1706989"
   host = "10.1.1.10"
   alias = "Spark"
-  thumbnail = "1a663881-01f3-44d9-9ac6-9e4ff1706989.jpg"

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -360,13 +361,16 @@ func (h *Handlers) ServeThumbnail(w http.ResponseWriter, r *http.Request) {
 	if idx := strings.LastIndex(id, "."); idx != -1 {
 		id = id[:idx]
 	}
+	log.Printf("ServeThumbnail: request for device %s (path: %s)", id, r.URL.Path)
 
 	thumbPath, found := h.config.GetThumbnailPath(id)
 	if !found {
+		log.Printf("ServeThumbnail: thumbnail not found for device %s", id)
 		http.NotFound(w, r)
 		return
 	}
 
+	log.Printf("ServeThumbnail: serving %s", thumbPath)
 	http.ServeFile(w, r, thumbPath)
 }
 
