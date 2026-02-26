@@ -82,16 +82,38 @@ func LoadConfig(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// GenerateMissingThumbnails creates pattern thumbnails for devices that don't have one
+// GenerateMissingThumbnails creates pattern thumbnails for devices that don't have one.
+// Auto-generated thumbnails are saved to disk but NOT recorded in the config file.
+// They are automatically matched to devices by ID when serving.
 func (c *Config) GenerateMissingThumbnails() {
 	for _, device := range c.Devices {
 		if device.Thumbnail == "" {
+			// Check if auto-generated thumbnail already exists
+			autoPath := filepath.Join(c.GetThumbnailDir(), device.ID+".jpg")
+			if _, err := os.Stat(autoPath); err == nil {
+				continue // Already exists
+			}
+
+			// Generate and save auto thumbnail (without updating config)
 			seed := device.ID + device.Host + device.Alias
 			if pattern, err := GeneratePatternThumbnail(seed); err == nil {
-				c.SetThumbnail(device.ID, pattern, ".jpg")
+				c.SaveAutoThumbnail(device.ID, pattern)
 			}
 		}
 	}
+}
+
+// SaveAutoThumbnail saves an auto-generated thumbnail without updating the config file.
+// The thumbnail is saved with a predictable filename ({id}.jpg) so it can be matched
+// automatically when serving.
+func (c *Config) SaveAutoThumbnail(id string, data []byte) error {
+	if err := c.EnsureThumbnailDir(); err != nil {
+		return fmt.Errorf("creating thumbnail dir: %w", err)
+	}
+
+	filename := id + ".jpg"
+	thumbPath := filepath.Join(c.GetThumbnailDir(), filename)
+	return os.WriteFile(thumbPath, data, 0644)
 }
 
 // Save writes the configuration to the TOML file atomically
@@ -171,14 +193,10 @@ func (c *Config) AddDevice(d DeviceWithAuth) (Device, error) {
 		return Device{}, err
 	}
 
-	// Generate a pattern thumbnail for the new device
+	// Generate an auto-thumbnail for the new device (not saved to config)
 	seed := device.ID + device.Host + device.Alias
 	if pattern, err := GeneratePatternThumbnail(seed); err == nil {
-		c.SetThumbnail(device.ID, pattern, ".jpg")
-		// Re-fetch device to get updated thumbnail field
-		if updated, found := c.GetDevice(device.ID); found {
-			device = updated
-		}
+		c.SaveAutoThumbnail(device.ID, pattern)
 	}
 
 	return device, nil
@@ -314,13 +332,15 @@ func (c *Config) SetThumbnail(id string, data []byte, ext string) error {
 	return c.Save()
 }
 
-// DeleteThumbnail removes a device's thumbnail
+// DeleteThumbnail removes a device's explicit thumbnail and regenerates an auto-thumbnail
 func (c *Config) DeleteThumbnail(id string) error {
 	c.mu.Lock()
 	var idx int = -1
+	var device Device
 	for i, d := range c.Devices {
 		if d.ID == id {
 			idx = i
+			device = d
 			break
 		}
 	}
@@ -335,17 +355,38 @@ func (c *Config) DeleteThumbnail(id string) error {
 	}
 	c.mu.Unlock()
 
-	return c.Save()
+	if err := c.Save(); err != nil {
+		return err
+	}
+
+	// Regenerate auto-thumbnail after deleting explicit one
+	seed := device.ID + device.Host + device.Alias
+	if pattern, err := GeneratePatternThumbnail(seed); err == nil {
+		c.SaveAutoThumbnail(device.ID, pattern)
+	}
+
+	return nil
 }
 
-// GetThumbnailPath returns the full path to a device's thumbnail
+// GetThumbnailPath returns the full path to a device's thumbnail.
+// It first checks for an explicitly set thumbnail in the config,
+// then falls back to checking for an auto-generated thumbnail.
 func (c *Config) GetThumbnailPath(id string) (string, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	for _, d := range c.Devices {
-		if d.ID == id && d.Thumbnail != "" {
-			return filepath.Join(c.GetThumbnailDir(), d.Thumbnail), true
+		if d.ID == id {
+			// First check for explicitly set thumbnail
+			if d.Thumbnail != "" {
+				return filepath.Join(c.GetThumbnailDir(), d.Thumbnail), true
+			}
+			// Fall back to auto-generated thumbnail
+			autoPath := filepath.Join(c.GetThumbnailDir(), id+".jpg")
+			if _, err := os.Stat(autoPath); err == nil {
+				return autoPath, true
+			}
+			return "", false
 		}
 	}
 	return "", false
