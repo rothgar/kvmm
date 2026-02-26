@@ -27,6 +27,16 @@ func NewHandlers(cfg *Config) *Handlers {
 func (h *Handlers) ListDevices(w http.ResponseWriter, r *http.Request) {
 	devices := h.config.GetDevices()
 
+	// Check for thumbnail existence (explicit or auto-generated) and set the field
+	for i := range devices {
+		if _, exists := h.config.GetThumbnailPath(devices[i].ID); exists {
+			// Set a non-empty value so frontend knows a thumbnail is available
+			if devices[i].Thumbnail == "" {
+				devices[i].Thumbnail = devices[i].ID + ".jpg"
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(devices)
 }
